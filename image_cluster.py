@@ -7,19 +7,27 @@ import pickle
 import os
 import tensorflow as tf
 from sklearn.preprocessing import normalize
-from imutils import build_montages
+from shutil import copy
+import argparse
 import face_recognition as FR
 from DistanceMetrics import Similarity
 
 
 class ImageCluster(object):
 
-    def __init__(self, imgs_path, blur=True, clusterSize=5, equalize=True, model='hog'):
+    def __init__(self, imgs_path, blur=1, clusterSize=5, equalize=1, model='hog', sortpath="./Results"):
         self.images = list()
-        self.blur = blur
-        self.equalize = equalize
-        self.model = model
-        self.clusterSize = clusterSize
+        self.blur = True if blur==1 else False
+        self.equalize = True if equalize==1 else False
+        if model == 'hog' or model == 'cnn':
+            self.model = model
+        else:
+            self.model = 'hog'
+        self.clusterSize = clusterSize if clusterSize > 0 else 5
+        self.sortPath = sortpath
+        if not os.path.exists(imgs_path):
+            print('The specified image folder path does not exist.')
+            exit(0)
         for root, dirnames, files in os.walk(imgs_path):
             for image in files:
                 if image.lower().endswith('.jpg') or image.lower().endswith('.png'):
@@ -91,7 +99,7 @@ class ImageCluster(object):
                             if self._blur_check(face) is True and self.blur is True:
                                 print('\t[INFO] Skipping face - too blurry to process')
                                 continue
-                            #face = self._prewhiten(face)
+                            face = self._prewhiten(face)
                             feed_dict = {img_holder:[face], phase_train:False}
                             encoding = session.run(embeddings, feed_dict=feed_dict)
 
@@ -114,60 +122,74 @@ class ImageCluster(object):
 
         points = [d['encoding'] for d in data]
         points = np.vstack(points)
-        points1 = normalize(points, norm='l2', axis=1)
+        points = normalize(points, norm='l2', axis=1)
         dist_metric = Similarity()
-        VI = np.matmul(points1.T, points1)
-        VI = np.linalg.inv(VI)
 
         clusterer = HDBSCAN(min_cluster_size=self.clusterSize,
                             metric='pyfunc',
                             func=dist_metric.fractional_distance)
-        clusterer.fit(points1)
-        results = list()
-
-
-        #------------------------------- FOR TESTING ONLY -----------------------------------#
+        clusterer.fit(points)
+        results = dict()
 
         labelIDs = np.unique(clusterer.labels_)
-        print(labelIDs)
         for labelID in labelIDs:
-            faces = list()
             idxs = np.where(clusterer.labels_ == labelID)[0]
-            idxs = np.random.choice(idxs, size=min(64, len(idxs)),
-                                    replace=False)
             for i in idxs:
-                image = cv2.imread(data[i]['path'])
-                (h, w) = image.shape[:2]
-                if (h, w) > (640, 480):
-                    image = cv2.resize(image, (int(w*0.4), int(h*0.4)))
-                (t, r, b, l) = data[i]['loc']
-                face = image[t:b, l:r]
-                face = cv2.resize(face, (96, 96))
-                faces.append(face)
+                if labelID not in results:
+                    results[labelID] = list()
+                results[labelID].append(data[i]['path'])
 
-            montage = build_montages(faces, (96, 96), (8, 8))[0]
-            title = 'Face ID #{}'.format(labelID)
-            title = 'Unknown Faces' if labelID == -1 else title
-            cv2.imshow(title, montage)
-            key = cv2.waitKey(0) & 0xFF
-            if key == ord('k'):
-                idxs = np.where(clusterer.labels_ == labelID)[0]
-                for i in idxs:
-                    results.append(data[i]['path'])
-                cv2.destroyAllWindows()
-            elif key == ord('n'):
-                cv2.destroyAllWindows()
-            elif key == ord('q'):
-                break
-        cv2.destroyAllWindows()
+        with open('results.pkl', 'wb') as file:
+            pickle.dump(results, file)
 
-        return results
+        return True
 
-        #--------------------------------------------------------------------------------------#
+
+    def sort_images(self):
+        with open('results.pkl', 'rb') as file:
+            data = pickle.load(file)
+
+        if not os.path.exists(self.sortPath):
+            os.mkdir(self.sortPath)
+
+        for labelID in data.keys():
+            if labelID == -1:
+                name = os.path.join(self.sortPath, 'Unknown')
+            else:
+                name = os.path.join(self.sortPath, str(labelID))
+            pathlist = data[labelID]
+            if not os.path.exists(name):
+                os.mkdir(name)
+            for path in pathlist:
+                copy(path, name)
+
+        print('Done')
+        return True
+
+
 
 
 if __name__ == '__main__':
-    path = ""
-    test = ImageCluster(path)
-    test.create_data_points()
-    test.cluster_data_points()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--impath", required=True,
+                        help="Path to folder containing images to be sorted")
+    parser.add_argument("-s", "--sortpath", required=False, default="./Results",
+                        help="Path to folder where sorted images will be saved. Default is ./Results")
+    parser.add_argument("-b", "--blurcheck", required=False, default=1,
+                        help="Perform a quality check using blurriness of image. Default is 1 (check for blur)")
+    parser.add_argument("-e", "--equalize", required=False, default=1,
+                        help="Equalize lighting conditions before processing. Default is 1 (equalize lighting)")
+    parser.add_argument("-c", "--clustersize", required=False, default=5,
+                        help="Minimum number of images expected per person. Default is 5")
+    parser.add_argument("-m", "--model", required=False, default="hog",
+                        help="Face detection model. Can be 'hog' or 'cnn'. Using 'cnn' is more accurate, but slower. Default is 'hog'")
+    arguments = vars(parser.parse_args())
+    cluster = ImageCluster(imgs_path=arguments['impath'],
+                           blur=arguments['blurcheck'],
+                           clusterSize=arguments['clustersize'],
+                           equalize=arguments['equalize'],
+                           model=arguments['model'],
+                           sortpath=arguments['sortpath'])
+    cluster.create_data_points()
+    cluster.cluster_data_points()
+    cluster.sort_images()

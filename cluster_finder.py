@@ -121,7 +121,6 @@ class PhotoClusterFinder(object):
                 sphere_point = np.add(centre_point, error)
                 sphere_radius = metric.fractional_distance(centre_point, sphere_point)
                 distance = metric.fractional_distance(centre_point, representative)
-                print(distance, sphere_radius)
                 if distance <= sphere_radius and labelID != -1:
                     possibilities.append(labelID)
 

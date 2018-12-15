@@ -96,7 +96,9 @@ class ImageCluster(object):
                         if self.equalize is True:
                             image = self._equalize(image)
 
-                        boxes = FR.face_locations(image,
+                        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
+                        boxes = FR.face_locations(gray,
                                                   model=self.model,
                                                   number_of_times_to_upsample=2)
                         print('\t[INFO] Found %d faces' % (len(boxes)))

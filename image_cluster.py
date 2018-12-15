@@ -64,6 +64,13 @@ class ImageCluster(object):
             return False # Face is not blurry
 
 
+    def _compute_statistics(self, encodings):
+        mean_encoding = np.mean(np.asarray(encodings))
+        std_dev = np.std(encodings, axis=0)
+
+        return (mean_encoding, std_dev)
+
+
     def create_data_points(self):
         data = list()
         with tf.Graph().as_default():
@@ -112,7 +119,7 @@ class ImageCluster(object):
                         return False
 
         with open('data_points.pkl', 'wb') as file:
-            pickle.dump(data, file)
+            pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
             return True
 
 
@@ -134,13 +141,19 @@ class ImageCluster(object):
         labelIDs = np.unique(clusterer.labels_)
         for labelID in labelIDs:
             idxs = np.where(clusterer.labels_ == labelID)[0]
+            encodings = list()
             for i in idxs:
                 if labelID not in results:
-                    results[labelID] = list()
-                results[labelID].append(data[i]['path'])
+                    results[labelID] = dict()
+                    results[labelID]['paths'] = list()
+                    results[labelID]['mean_encoding'] = None
+                    results[labelID]['std_dev'] = None
+                results[labelID]['paths'].append(data[i]['path'])
+                encodings.append(data[i]['encoding'])
+            results[labelID]['mean_encoding'], results[labelID]['std_dev'] = self._compute_statistics(encodings)
 
         with open('results.pkl', 'wb') as file:
-            pickle.dump(results, file)
+            pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
 
         return True
 
@@ -157,7 +170,7 @@ class ImageCluster(object):
                 name = os.path.join(self.sortPath, 'Unknown')
             else:
                 name = os.path.join(self.sortPath, str(labelID))
-            pathlist = data[labelID]
+            pathlist = data[labelID]['paths']
             if not os.path.exists(name):
                 os.mkdir(name)
             for path in pathlist:

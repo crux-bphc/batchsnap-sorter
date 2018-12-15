@@ -65,7 +65,7 @@ class ImageCluster(object):
 
 
     def _compute_statistics(self, encodings):
-        mean_encoding = np.mean(np.asarray(encodings))
+        mean_encoding = np.mean(np.asarray(encodings), axis=0)
         std_dev = np.std(encodings, axis=0)
 
         return (mean_encoding, std_dev)

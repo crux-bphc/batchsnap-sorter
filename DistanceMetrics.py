@@ -80,7 +80,7 @@ class Similarity:
         q_square = self.vector_operators.square(q_vec)
         return max(pq / (p_square + q_square - pq), self.e)
 
-    def fractional_distance(self, p_vec, q_vec, fraction=4.0):
+    def fractional_distance(self, p_vec, q_vec, fraction=0.5):
         """
         This method implements the fractional distance metric. I have implemented memoization for this method to reduce
         the number of function calls required. The net effect is that the algorithm runs 400% faster. A similar approach
@@ -97,15 +97,14 @@ class Similarity:
             x = memoization.get(key)
             if x is None:
                 diff = p_vec - q_vec
-                #diff_fraction = diff**fraction
-                diff_fraction = np.power(diff, fraction)
+                diff_fraction = np.power(np.abs(diff), fraction)
                 return max(math.pow(abs(np.sum(diff_fraction)), float(1.0/fraction)), self.e)
             else:
                 return x
         else:
             diff = p_vec - q_vec
-            diff_fraction = diff**fraction
-            return max(math.pow(np.sum(diff_fraction), 1/fraction), self.e)
+            diff_fraction = np.power(np.abs(diff), fraction)
+            return max(math.pow(abs(np.sum(diff_fraction)), float(1.0/fraction)), self.e)
 
     @staticmethod
     def get_key(p_vec, q_vec):

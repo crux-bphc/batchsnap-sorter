@@ -113,7 +113,7 @@ class ImageCluster(object):
                             encoding = session.run(embeddings, feed_dict=feed_dict)
 
                             if len(encoding) > 0:
-                                d = [{'path':path, 'loc':(t, r, b, l), 'encoding':encoding[0]}]
+                                d = [{'path':path, 'encoding':encoding[0]}]
                                 data.extend(d)
 
                     except:

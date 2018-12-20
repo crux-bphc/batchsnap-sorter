@@ -105,9 +105,10 @@ class ImageCluster(object):
                         for box in boxes:
                             (t, r, b, l) = box
                             face = cv2.resize(image[t:b, l:r], (160, 160))
-                            if self._blur_check(face) is True and self.blur is True:
-                                print('\t[INFO] Skipping face - too blurry to process')
-                                continue
+                            if self.blur is True:
+                                if self._blur_check(face) is True:
+                                    print('\t[INFO] Skipping face - too blurry to process')
+                                    continue
                             face = self._prewhiten(face)
                             feed_dict = {img_holder:[face], phase_train:False}
                             encoding = session.run(embeddings, feed_dict=feed_dict)

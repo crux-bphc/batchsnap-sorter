@@ -6,7 +6,7 @@ from facenet import facenet
 import pickle
 import os
 import tensorflow as tf
-from sklearn.preprocessing import normalize
+from sklearn.preprocessing import StandardScaler
 from shutil import copy
 import argparse
 import face_recognition as FR
@@ -132,7 +132,10 @@ class ImageCluster(object):
 
         points = [d['encoding'] for d in data]
         points = np.vstack(points)
-        points = normalize(points, norm='l2', axis=1)
+        # points = normalize(points, norm='l2', axis=1)
+        scaler = StandardScaler()
+        scaler.fit(points)
+        points = scaler.transform(points)
         dist_metric = Similarity()
 
         clusterer = HDBSCAN(min_cluster_size=self.clusterSize,

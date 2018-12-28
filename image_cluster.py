@@ -11,11 +11,13 @@ from shutil import copy
 import argparse
 import face_recognition as FR
 from DistanceMetrics import Similarity
+from imutils.face_utils import FaceAligner
 
 
 class ImageCluster(object):
 
-    def __init__(self, imgs_path, blur=1, clusterSize=5, equalize=1, model='hog', sortpath="./Results"):
+    def __init__(self, imgs_path, blur=1, clusterSize=5, equalize=1, model='hog', 
+                 sortpath="./Results", align_face=1):
         self.images = list()
         self.blur = True if blur==1 else False
         self.equalize = True if equalize==1 else False
@@ -25,6 +27,9 @@ class ImageCluster(object):
             self.model = 'hog'
         self.clusterSize = clusterSize if clusterSize > 0 else 5
         self.sortPath = sortpath
+        self.alignFace = True if align_face==1 else False
+        predictor = dlib.shape_predictor('models/sp_68_point.dat')
+        self.aligner = FaceAligner(predictor, desiredFaceWidth=160)
         if not os.path.exists(imgs_path):
             print('The specified image folder path does not exist.')
             exit(0)
@@ -104,7 +109,11 @@ class ImageCluster(object):
                         print('\t[INFO] Found %d faces' % (len(boxes)))
                         for box in boxes:
                             (t, r, b, l) = box
-                            face = cv2.resize(image[t:b, l:r], (160, 160))
+                            if self.alignFace is True:
+                                rect = dlib.rectangle(l, t, r, b)
+                                face = self.aligner.align(image, gray, rect)
+                            else:
+                                face = cv2.resize(image[t:b, l:r], (160, 160))
                             if self.blur is True:
                                 if self._blur_check(face) is True:
                                     print('\t[INFO] Skipping face - too blurry to process')
@@ -202,13 +211,16 @@ if __name__ == '__main__':
                         help="Minimum number of images expected per person. Default is 5")
     parser.add_argument("-m", "--model", required=False, default="hog",
                         help="Face detection model. Can be 'hog' or 'cnn'. Using 'cnn' is more accurate, but slower. Default is 'hog'")
+    parser.add_argument("-a", "--alignfaces", required=False, default=1,
+                        help="Align detected faces. Default is 1 (align faces before preprocessing)")
     arguments = vars(parser.parse_args())
     cluster = ImageCluster(imgs_path=arguments['impath'],
                            blur=arguments['blurcheck'],
                            clusterSize=arguments['clustersize'],
                            equalize=arguments['equalize'],
                            model=arguments['model'],
-                           sortpath=arguments['sortpath'])
+                           sortpath=arguments['sortpath'],
+                           align_face=arguments['alignfaces'])
     cluster.create_data_points()
     cluster.cluster_data_points()
     cluster.sort_images()

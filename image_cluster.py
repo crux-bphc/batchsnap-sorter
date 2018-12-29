@@ -94,8 +94,8 @@ class ImageCluster(object):
                         image = cv2.imread(path)
                         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                         (h, w) = image.shape[:2]
-                        if (h, w) > (640, 480):
-                            image = cv2.resize(image, (0, 0), fx=0.4, fy=0.4)
+                        if (w, h) > (640, 480):
+                            image = cv2.resize(image, (0, 0), fx=0.4, fy=0.4, interpolation=cv2.INTER_AREA)
                         print('[INFO] Processing image %d of %d; path : %s' % (i, len(self.images), path))
 
                         if self.equalize is True:

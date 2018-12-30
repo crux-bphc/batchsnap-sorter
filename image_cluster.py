@@ -145,6 +145,9 @@ class ImageCluster(object):
         scaler = StandardScaler()
         scaler.fit(points)
         points = scaler.transform(points)
+        with open('standardization_data.pkl', 'wb') as file:
+            std_data = {'s_mean':scaler.mean_, 's_var':scaler.var_}
+            pickle.dump(std_data, file, protocol=pickle.HIGHEST_PROTOCOL)
         dist_metric = Similarity()
 
         clusterer = HDBSCAN(min_cluster_size=self.clusterSize,

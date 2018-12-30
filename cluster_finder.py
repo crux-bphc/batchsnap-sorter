@@ -2,7 +2,6 @@ import cv2
 from facenet import facenet
 import pickle
 import numpy as np
-from sklearn.preprocessing import normalize
 from DistanceMetrics import Similarity
 import face_recognition as FR
 import tensorflow as tf
@@ -112,7 +111,12 @@ class PhotoClusterFinder(object):
         metric = Similarity()
         possibilities = list()
         if representative is not None:
-            representative = normalize(np.asarray([representative]), norm='l2', axis=1)
+            with open('standardization_data.pkl', 'rb') as file:
+                standardization_data = pickle.load(file)
+                mean = standardization_data['s_mean']
+                std_dev = standardization_data['s_var']
+                std_dev = np.power(std_dev, 0.500000)
+            representative = np.divide(np.subtract(representative, mean), std_dev)
             for labelID in data.keys():
                 centre_point = data[labelID]['mean_encoding']
                 error = data[labelID]['std_dev']*1.50 

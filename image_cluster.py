@@ -29,7 +29,7 @@ class ImageCluster(object):
         self.sortPath = sortpath
         self.alignFace = True if align_face==1 else False
         predictor = dlib.shape_predictor('models/sp_68_point.dat')
-        self.aligner = FaceAligner(predictor, desiredFaceWidth=160)
+        self.aligner = FaceAligner(predictor, desiredFaceWidth=300)
         if not os.path.exists(imgs_path):
             print('The specified image folder path does not exist.')
             exit(0)
@@ -112,6 +112,17 @@ class ImageCluster(object):
                             if self.alignFace is True:
                                 rect = dlib.rectangle(l, t, r, b)
                                 face = self.aligner.align(image, gray, rect)
+                                try:
+                                    (y1, x2, y2, x1) = FR.face_locations(face,
+                                                                         model=self.model)[0]
+                                    face = cv2.resize(face[y1:y2, x1:x2], (160, 160))
+                                except:
+                                    pass
+
+                                # Aligning faces introduces unnecessary background elements.
+                                # Re-running face detection is slightly more computationally
+                                # intensive, but cuts out those background elements.
+
                             else:
                                 face = cv2.resize(image[t:b, l:r], (160, 160))
                             if self.blur is True:

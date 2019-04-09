@@ -180,6 +180,7 @@ class ImageCluster(object):
                 results[labelID]['paths'].append(data[i]['path'])
                 encodings.append(data[i]['encoding'])
             results[labelID]['mean_encoding'], results[labelID]['std_dev'] = self._compute_statistics(encodings)
+            results[labelID]['sample_size'] = len(results[labelID]['paths'])
 
         with open('results.pkl', 'wb') as file:
             pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
@@ -237,4 +238,4 @@ if __name__ == '__main__':
                            align_face=arguments['alignfaces'])
     cluster.create_data_points()
     cluster.cluster_data_points()
-    cluster.sort_images()
+    #cluster.sort_images()

@@ -39,6 +39,8 @@ tensorflow-estimator = "==1.13.0"
 termcolor = "==1.1.0"
 werkzeug = "==0.15.1"
 flask-cors = "*"
+facenet = "*"
+gunicorn = "*"
 
 [requires]
 python_version = "3.7"

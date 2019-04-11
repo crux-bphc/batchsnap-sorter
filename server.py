@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 import os
-from flask import Flask, send_from_directory, abort
+import tempfile
+from flask import Flask, send_from_directory, abort, jsonify, request
 
-BUILD_FOLD = 'frontend/build/'
+BUILD_FOLD = os.environ.get('BUILD_FOLD', 'frontend/build/')
+IMAGES_FOLD = os.environ.get('IMAGES_FOLD', '/images')
+
 app = Flask("Batchsnap Sorter", static_folder=BUILD_FOLD)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 
 @app.route('/')
@@ -11,9 +15,24 @@ def index():
     return send_from_directory(BUILD_FOLD, 'index.html')
 
 
-@app.route('/image', methods=['POST'])
+@app.route('/image/', methods=['POST'])
 def handle_image():
-    return "Coming soon"
+    if 'image' not in request.files:
+        abort(400)
+    img = request.files['image']
+    if img.content_type not in ('image/jpeg', 'image/png'):
+        abort(400)
+    img_type = '.png' if img.content_type.endswith('png') else '.jpg'
+    with tempfile.TemporaryFile(suffix=img_type) as temp:
+        img.save(temp)
+        # call clusterer
+        links = []
+    return jsonify({'links': links})
+
+
+@app.route('/images')
+def serve_images(filename):
+    return send_from_directory(IMAGES_FOLD, filename)
 
 
 @app.route('/<path:path>')

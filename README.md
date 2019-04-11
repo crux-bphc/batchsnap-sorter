@@ -1,3 +1,3 @@
 # BatchSnap Sorter
 
-This is the repository for the client-side part of the batchsnaps sorter.
+Find all images that have your face in it.

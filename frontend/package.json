@@ -6,16 +6,21 @@
   "dependencies": {
     "antd": "^3.13.6",
     "axios": "^0.18.0",
+    "babel-plugin-import": "^1.11.0",
+    "customize-cra": "^0.2.12",
+    "file-saver": "^2.0.1",
     "form-data": "^2.3.3",
+    "jszip": "^3.2.1",
     "react": "^16.8.3",
+    "react-app-rewired": "^2.1.1",
     "react-dom": "^16.8.3",
     "react-scripts": "2.1.5",
     "react-webcam": "^1.1.0"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired build",
+    "test": "react-app-rewired test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

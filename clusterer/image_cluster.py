@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import dlib
 from hdbscan import HDBSCAN
-from facenet import facenet
+from clusterer.facenet import facenet
 import pickle
 import os
 import tensorflow as tf
@@ -16,19 +16,19 @@ from imutils.face_utils import FaceAligner
 
 class ImageCluster(object):
 
-    def __init__(self, imgs_path, blur=1, clusterSize=5, equalize=1, model='hog', 
+    def __init__(self, imgs_path, blur=1, clusterSize=5, equalize=1, model='hog',
                  sortpath="./Results", align_face=1):
         self.images = list()
-        self.blur = True if blur==1 else False
-        self.equalize = True if equalize==1 else False
+        self.blur = True if blur == 1 else False
+        self.equalize = True if equalize == 1 else False
         if model == 'hog' or model == 'cnn':
             self.model = model
         else:
             self.model = 'hog'
         self.clusterSize = clusterSize if clusterSize > 0 else 5
         self.sortPath = sortpath
-        self.alignFace = True if align_face==1 else False
-        predictor = dlib.shape_predictor('models/sp_68_point.dat')
+        self.alignFace = True if align_face == 1 else False
+        predictor = dlib.shape_predictor('clusterer/models/sp_68_point.dat')
         self.aligner = FaceAligner(predictor, desiredFaceWidth=300)
         if not os.path.exists(imgs_path):
             print('The specified image folder path does not exist.')
@@ -38,7 +38,6 @@ class ImageCluster(object):
                 if image.lower().endswith('.jpg') or image.lower().endswith('.png'):
                     self.images.append(os.path.join(root, image))
         self.images.sort()
-
 
     def _equalize(self, image):
         lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
@@ -50,15 +49,13 @@ class ImageCluster(object):
 
         return processed
 
-
     def _prewhiten(self, image):
         mean = np.mean(image)
         std = np.std(image)
-        std_adj = np.maximum(std, 1.0/np.sqrt(image.size))
-        processed = np.multiply(np.subtract(image, mean), 1/std_adj)
-        
-        return processed
+        std_adj = np.maximum(std, 1.0 / np.sqrt(image.size))
+        processed = np.multiply(np.subtract(image, mean), 1 / std_adj)
 
+        return processed
 
     def _blur_check(self, image, threshold=50):
         image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -66,8 +63,7 @@ class ImageCluster(object):
         if blur < threshold:
             return True  # Face is blurry!
         else:
-            return False # Face is not blurry
-
+            return False  # Face is not blurry
 
     def _compute_statistics(self, encodings):
         mean_encoding = np.mean(np.asarray(encodings), axis=0)
@@ -75,19 +71,18 @@ class ImageCluster(object):
 
         return (mean_encoding, std_dev)
 
-
     def create_data_points(self):
         data = list()
         with tf.Graph().as_default():
             with tf.Session() as session:
 
-                facenet.load_model('models/20180402-114759.pb')
+                facenet.load_model('clusterer/models/20180402-114759.pb')
                 img_holder = tf.get_default_graph().get_tensor_by_name(
-                                    'input:0')
+                    'input:0')
                 embeddings = tf.get_default_graph().get_tensor_by_name(
-                                    'embeddings:0')
+                    'embeddings:0')
                 phase_train = tf.get_default_graph().get_tensor_by_name(
-                                    'phase_train:0')
+                    'phase_train:0')
 
                 for (i, path) in enumerate(self.images, 1):
                     try:
@@ -95,8 +90,10 @@ class ImageCluster(object):
                         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                         (h, w) = image.shape[:2]
                         if (w, h) > (640, 480):
-                            image = cv2.resize(image, (0, 0), fx=0.4, fy=0.4, interpolation=cv2.INTER_AREA)
-                        print('[INFO] Processing image %d of %d; path : %s' % (i, len(self.images), path))
+                            image = cv2.resize(
+                                image, (0, 0), fx=0.4, fy=0.4, interpolation=cv2.INTER_AREA)
+                        print('[INFO] Processing image %d of %d; path : %s' %
+                              (i, len(self.images), path))
 
                         if self.equalize is True:
                             image = self._equalize(image)
@@ -115,9 +112,11 @@ class ImageCluster(object):
                                 try:
                                     (y1, x2, y2, x1) = FR.face_locations(face,
                                                                          model=self.model)[0]
-                                    face = cv2.resize(face[y1:y2, x1:x2], (160, 160))
-                                except:
-                                    pass
+                                    face = cv2.resize(
+                                        face[y1:y2, x1:x2], (160, 160))
+                                except Exception as e:
+                                    print(e)
+                                    face = cv2.resize(image[t:b, l:r], (160, 160))
 
                                 # Aligning faces introduces unnecessary background elements.
                                 # Re-running face detection is slightly more computationally
@@ -127,24 +126,26 @@ class ImageCluster(object):
                                 face = cv2.resize(image[t:b, l:r], (160, 160))
                             if self.blur is True:
                                 if self._blur_check(face) is True:
-                                    print('\t[INFO] Skipping face - too blurry to process')
+                                    print(
+                                        '\t[INFO] Skipping face - too blurry to process')
                                     continue
                             face = self._prewhiten(face)
-                            feed_dict = {img_holder:[face], phase_train:False}
-                            encoding = session.run(embeddings, feed_dict=feed_dict)
+                            feed_dict = {img_holder: [
+                                face], phase_train: False}
+                            encoding = session.run(
+                                embeddings, feed_dict=feed_dict)
 
                             if len(encoding) > 0:
-                                d = [{'path':path, 'encoding':encoding[0]}]
-                                data.extend(d)
+                                data.append({'path': path, 'encoding': encoding[0]})
 
-                    except:
+                    except Exception as e:
+                        print(e)
                         print("There was an error. That's all we know.")
                         return False
 
         with open('data_points.pkl', 'wb') as file:
             pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
             return True
-
 
     def cluster_data_points(self):
         with open('data_points.pkl', 'rb') as file:
@@ -157,7 +158,7 @@ class ImageCluster(object):
         scaler.fit(points)
         points = scaler.transform(points)
         with open('standardization_data.pkl', 'wb') as file:
-            std_data = {'s_mean':scaler.mean_, 's_var':scaler.var_}
+            std_data = {'s_mean': scaler.mean_, 's_var': scaler.var_}
             pickle.dump(std_data, file, protocol=pickle.HIGHEST_PROTOCOL)
         dist_metric = Similarity()
 
@@ -179,14 +180,14 @@ class ImageCluster(object):
                     results[labelID]['std_dev'] = None
                 results[labelID]['paths'].append(data[i]['path'])
                 encodings.append(data[i]['encoding'])
-            results[labelID]['mean_encoding'], results[labelID]['std_dev'] = self._compute_statistics(encodings)
+            results[labelID]['mean_encoding'], results[labelID]['std_dev'] = self._compute_statistics(
+                encodings)
             results[labelID]['sample_size'] = len(results[labelID]['paths'])
 
         with open('results.pkl', 'wb') as file:
             pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
 
         return True
-
 
     def sort_images(self):
         with open('results.pkl', 'rb') as file:
@@ -208,8 +209,6 @@ class ImageCluster(object):
 
         print('Done')
         return True
-
-
 
 
 if __name__ == '__main__':
@@ -236,6 +235,10 @@ if __name__ == '__main__':
                            model=arguments['model'],
                            sortpath=arguments['sortpath'],
                            align_face=arguments['alignfaces'])
-    cluster.create_data_points()
-    cluster.cluster_data_points()
-    #cluster.sort_images()
+    try:
+        cluster.create_data_points()
+        cluster.cluster_data_points()
+    except FileNotFoundError:
+        print("Some intermediate error has occurred.")
+        pass
+    # cluster.sort_images()

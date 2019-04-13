@@ -2,6 +2,9 @@
 import os
 import tempfile
 from flask import Flask, send_from_directory, abort, jsonify, request
+from clusterer.cluster_finder import get_images
+import cv2
+
 
 BUILD_FOLD = os.environ.get('BUILD_FOLD', 'frontend/build/')
 IMAGES_FOLD = os.environ.get('IMAGES_FOLD', '/images')
@@ -23,10 +26,10 @@ def handle_image():
     if img.content_type not in ('image/jpeg', 'image/png'):
         abort(400)
     img_type = '.png' if img.content_type.endswith('png') else '.jpg'
-    with tempfile.TemporaryFile(suffix=img_type) as temp:
+    with tempfile.NamedTemporaryFile(suffix=img_type) as temp:
         img.save(temp)
-        # call clusterer
-        links = []
+        image = cv2.imread(temp.name)
+        links = get_images(image)
     return jsonify({'links': links})
 
 

@@ -41,6 +41,7 @@ werkzeug = "==0.15.1"
 flask-cors = "*"
 facenet = "*"
 gunicorn = "*"
+imutils = "*"
 
 [requires]
 python_version = "3.7"

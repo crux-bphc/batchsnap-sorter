@@ -7,7 +7,7 @@ import cv2
 
 
 BUILD_FOLD = os.environ.get('BUILD_FOLD', 'frontend/build/')
-IMAGES_FOLD = os.environ.get('IMAGES_FOLD', '/images')
+IMAGES_FOLD = os.environ.get('IMAGES_FOLD', 'images')
 
 app = Flask("Batchsnap Sorter", static_folder=BUILD_FOLD)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -33,7 +33,7 @@ def handle_image():
     return jsonify({'links': links})
 
 
-@app.route('/images')
+@app.route('/images/<filename>')
 def serve_images(filename):
     return send_from_directory(IMAGES_FOLD, filename)
 

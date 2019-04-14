@@ -30,10 +30,11 @@ def handle_image():
         img.save(temp)
         image = cv2.imread(temp.name)
         links = get_images(image)
+        links = [('/images/' + f) for f in links]
     return jsonify({'links': links})
 
 
-@app.route('/images')
+@app.route('/images/<filename>')
 def serve_images(filename):
     return send_from_directory(IMAGES_FOLD, filename)
 

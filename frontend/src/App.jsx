@@ -2,6 +2,7 @@ import React, { Component } from "react";
 import { Card, Divider, Button, message, Icon } from "antd";
 import FileUpload from "./components/FileUpload";
 import Camera from "./components/Camera";
+import Downloader from "./components/Downloader";
 import axios from "axios";
 
 class App extends Component {
@@ -9,7 +10,7 @@ class App extends Component {
     camera: false,
     upload: false,
     gotResponse: false,
-    link: ""
+    links: []
   };
 
   toggleCamera = () => {
@@ -23,7 +24,8 @@ class App extends Component {
       .post("/image/", formData)
       .then(res => {
         let response = res.data;
-        this.setState({ link: response.link || "", gotResponse: true });
+        console.log(response.links);
+        this.setState({ links: response.links || [], gotResponse: true });
         message.success("Uploaded successfully");
       })
       .catch(err => {
@@ -36,7 +38,7 @@ class App extends Component {
   reset = () => {
     this.setState({
       upload: false,
-      link: "",
+      links: [],
       gotResponse: false,
       camera: false
     });
@@ -92,16 +94,18 @@ class App extends Component {
 
               {this.state.gotResponse && (
                 <div>
-                  {this.state.link !== "" && (
+                  {this.state.links.length !== 0 && (
                     <div>
-                      <h2>Click the link to download</h2>
-                      <a href={this.state.link}>Download</a>
+                      <Downloader
+                        onCompleteOrCancel={this.reset}
+                        links={this.state.links}
+                      />
                     </div>
                   )}
 
-                  {this.state.link === "" && (
+                  {!this.state.links.length && (
                     <div>
-                      <h2>Sorry, we couldn't find any pictures of you</h2>
+                      <h2>Sorry, we couldn't find any pictures of you.</h2>
                     </div>
                   )}
                 </div>
@@ -113,7 +117,7 @@ class App extends Component {
                 }}
                 onClick={this.reset}
               >
-                Try Again with a new picture
+                Try Again.
               </Button>
             </Card>
           </div>

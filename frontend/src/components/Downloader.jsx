@@ -16,46 +16,41 @@ class Downloader extends Component {
     this.downloadImages();
   }
 
-  downloadImages = () => {
+  downloadImages = async () => {
     const { links } = this.props;
     let count = 0;
     let zip = JSZip();
 
-    console.log(links);
-
-    links.forEach(l => {
-      axios
-        .get(l, {
+    for (let l of links) {
+      let res = null;
+      try {
+        res = await axios.get(l, {
           responseType: "blob"
-        })
-        .then(res => {
-          zip.file(`image${count}`, res.data, {
-            binary: true
-          });
-
-          ++count;
-          this.setState({ progress: (count / links.length) * 100 });
-
-          if (count === links.length) {
-            zip
-              .generateAsync({
-                type: "blob"
-              })
-              .then(content => {
-                saveAs(content, new Date() + ".zip");
-                this.close();
-              })
-              .catch(err => {
-                message.error("Error while zipping!");
-                this.close();
-              });
-          }
-        })
-        .catch(err => {
-          message.error("Could not download Images");
-          this.close();
         });
-    });
+      } catch (e) {
+        message.error("Could not download Images");
+        break;
+      }
+
+      const imageName = l.split("/")[2];
+      zip.file(imageName, res.data, {
+        binary: true
+      });
+
+      ++count;
+      this.setState({ progress: Math.floor((count / links.length) * 100) });
+    }
+
+    if (count === links.length)
+      try {
+        const content = await zip.generateAsync({
+          type: "blob"
+        });
+        saveAs(content, `batchsnap-pics-${new Date()}.zip`);
+      } catch (e) {
+        message.error("Error while zipping!");
+      }
+    this.close();
   };
 
   close = () => {

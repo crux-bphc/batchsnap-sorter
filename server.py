@@ -7,7 +7,7 @@ import cv2
 
 
 BUILD_FOLD = os.environ.get('BUILD_FOLD', 'frontend/build/')
-IMAGES_FOLD = os.environ.get('IMAGES_FOLD', 'images')
+IMAGES_FOLD = os.environ.get('IMAGES_FOLD', '/images')
 
 app = Flask("Batchsnap Sorter", static_folder=BUILD_FOLD)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -30,6 +30,7 @@ def handle_image():
         img.save(temp)
         image = cv2.imread(temp.name)
         links = get_images(image)
+        links = [('/images/' + f) for f in links]
     return jsonify({'links': links})
 
 

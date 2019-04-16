@@ -70,8 +70,8 @@ def find_clusters(representative=None, use_CI=True, sigma=1.25):
     possibilities = list()
     if representative is not None:
         if use_CI is True:
-            # Use confidence intervals to check whether the person corresponds to a given
-            # cluster or not. A z-distribution is assumed here.
+            # Use confidence intervals to check whether the person corresponds
+            # to a given cluster or not. A z-distribution is assumed here.
             for labelID in data.keys():
                 if labelID == -1:
                     pass
@@ -107,6 +107,8 @@ def find_clusters(representative=None, use_CI=True, sigma=1.25):
 
 def get_images(image):
     encodings = prepare_encodings(image)
+    if encodings is None:
+        return []
     clusters = find_clusters(encodings)
     if len(clusters) == 1:
         return clusters[0]['paths']

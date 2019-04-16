@@ -30,7 +30,6 @@ def handle_image():
         img.save(temp)
         image = cv2.imread(temp.name)
         links = get_images(image)
-        links = [('/images/' + f) for f in links]
     return jsonify({'links': links})
 
 

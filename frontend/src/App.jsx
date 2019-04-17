@@ -4,7 +4,7 @@ import FileUpload from "./components/FileUpload";
 import Camera from "./components/Camera";
 import Downloader from "./components/Downloader";
 import axios from "axios";
-
+import logo from "./assets/logo.png";
 class App extends Component {
   state = {
     camera: false,
@@ -122,6 +122,30 @@ class App extends Component {
             </Card>
           </div>
         )}
+
+        <footer
+          style={{
+            marginTop: "5%"
+          }}
+        >
+          <span>
+            <h4
+              style={{
+                fontFamily: "helvetica"
+              }}
+            >
+              Powered by CRUX
+            </h4>
+            <img
+              style={{
+                height: "50px",
+                width: "50px"
+              }}
+              src={logo}
+              alt="~~~~~~"
+            />
+          </span>
+        </footer>
       </div>
     );
   }

@@ -1,0 +1,22 @@
+version: "3"
+services:
+  clusterer:
+    image: bs-cl
+    volumes:
+      - /images:/images
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+    networks:
+      - webnet
+  frontend:
+    image: bs-fr
+    volumes:
+      - /images:/images
+    ports:
+      - "80:80"
+    networks:
+      - webnet
+networks:
+  webnet:

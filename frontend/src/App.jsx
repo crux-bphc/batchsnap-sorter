@@ -1,20 +1,15 @@
 import React, { Component } from "react";
-import { Card, Divider, Button, message, Icon } from "antd";
+import { Card, Button, message, Icon } from "antd";
 import FileUpload from "./components/FileUpload";
-import Camera from "./components/Camera";
 import Downloader from "./components/Downloader";
 import axios from "axios";
 import logo from "./assets/logo.png";
+
 class App extends Component {
   state = {
-    camera: false,
     upload: false,
     gotResponse: false,
     links: []
-  };
-
-  toggleCamera = () => {
-    this.setState({ camera: !this.state.camera });
   };
 
   onUpload = file => {
@@ -39,8 +34,7 @@ class App extends Component {
     this.setState({
       upload: false,
       links: [],
-      gotResponse: false,
-      camera: false
+      gotResponse: false
     });
   };
 
@@ -49,7 +43,7 @@ class App extends Component {
       <div style={{ textAlign: "center", marginTop: "5%" }}>
         <h1>Welcome to BatchSnap Sorter!</h1>
 
-        {!this.state.camera && !this.state.upload && (
+        {!this.state.upload && (
           <div
             style={{
               marginLeft: "33%",
@@ -61,18 +55,7 @@ class App extends Component {
             <Card>
               <FileUpload onUpload={this.onUpload} />
             </Card>
-            <Divider> OR</Divider>
           </div>
-        )}
-
-        {!this.state.upload && (
-          <Button onClick={this.toggleCamera}>
-            {!this.state.camera ? "Click a picture" : "Close Camera"}
-          </Button>
-        )}
-
-        {this.state.camera && !this.state.upload && (
-          <Camera onUpload={this.onUpload} />
         )}
 
         {this.state.upload && (

@@ -51,7 +51,7 @@ class Downloader extends Component {
         currentZipSize = res.data.size;
       }
 
-      const imageName = l.split("/")[2];
+      const imageName = l.split(/^\/images\//)[1];
       currentZip.file(imageName, res.data, {
         binary: true
       });

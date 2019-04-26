@@ -1,6 +1,8 @@
 import argparse
+import logging
 import os
 import pickle
+import queue
 import cv2
 import dlib
 import numpy as np
@@ -11,9 +13,10 @@ from hdbscan import HDBSCAN
 from imutils.face_utils import FaceAligner
 from facenet import facenet
 from DistanceMetrics import Similarity
-from multiprocessing import Queue, Process
+from multiprocessing import Queue, Process, current_process
 
-
+logging.basicConfig(filename='clusterer.log', level=logging.DEBUG,
+                    format='%(asctime)s %(message)s')
 MODEL = 'hog'
 MIN_CLUSTER_SIZE = 5
 
@@ -43,14 +46,23 @@ def _blur_check(image, threshold=50):
 def create_data_points(img_queue, enc_queue):
     predictor = dlib.shape_predictor('models/sp_68_point.dat')
     aligner = FaceAligner(predictor, desiredFaceWidth=300)
-
+    proc_name = current_process().name
     with tf.Graph().as_default(), tf.Session() as session:
         graph = tf.get_default_graph()
         facenet.load_model('models/20180402-114759.pb')
         img_holder = graph.get_tensor_by_name('input:0')
         embeddings = graph.get_tensor_by_name('embeddings:0')
         phase_train = graph.get_tensor_by_name('phase_train:0')
-        for path in iter(img_queue.get, 'END'):
+        while True:
+            try:
+                path = img_queue.get(timeout=10)
+            except queue.Empty:
+                logging.info('Input queue is empty. Shutting down process.')
+                break
+            else:
+                if path == 'END':
+                    break
+            logging.debug("{}: Processing {}".format(proc_name, path))
             try:
                 image = cv2.imread(path)
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -83,6 +95,7 @@ def create_data_points(img_queue, enc_queue):
 
 
 def cluster_data_points(data_points):
+    logging.info("Starting clustering")
     points = [d['encoding'] for d in data_points]
     points = np.vstack(points)
     scaler = StandardScaler()
@@ -93,6 +106,7 @@ def cluster_data_points(data_points):
     clusterer = HDBSCAN(min_cluster_size=MIN_CLUSTER_SIZE,
                         metric='pyfunc',
                         func=dist_metric.fractional_distance)
+    logging.debug("HDBSCAN done")
     clusterer.fit(points)
     results = {}
     labelIDs = np.unique(clusterer.labels_)
@@ -110,42 +124,100 @@ def cluster_data_points(data_points):
             'std_dev': np.std(encodings, axis=0),
             'sample_size': len(paths)
         }
+    logging.info("Finished clustering, found {} clusters".format(len(results)))
     return results
 
 
 def gather_images(impath):
+    try:
+        with open('data_points.pkl', 'rb') as f:
+            data = pickle.load(f)
+    except FileNotFoundError:
+        processed_paths = set()
+    else:
+        processed_paths = {d['path'] for d in data}
+    logging.debug("Already processed {} images.".format(len(processed_paths)))
     for root, dirnames, files in os.walk(impath):
         for file in files:
             name = file.lower()
             if name.endswith('.jpg') or name.endswith('.png'):
-                yield os.path.join(root, file)
+                path = os.path.join(root, file)
+                if path not in processed_paths:
+                    yield path
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--impath", required=True,
+    parser.add_argument("--path",
                         help="Path to folder containing images to be sorted")
+    parser.add_argument('--clean-start', action='store_true', dest='clean',
+                        help="Discard results of previous runs and start over")
     args = parser.parse_args()
+    if args.clean and not args.path:
+        print("Please provide path to images folder")
+        return
     inp_queue = Queue()
     enc_queue = Queue()
     NUM_PROCESSES = os.cpu_count() or 1
-    for _ in range(NUM_PROCESSES):
-        Process(target=create_data_points, args=(inp_queue, enc_queue)).start()
-    for img in gather_images(args.impath):
+    logging.info(f"Starting {NUM_PROCESSES} processes.")
+    processes = []
+    for i in range(NUM_PROCESSES):
+        p = Process(target=create_data_points, args=(inp_queue, enc_queue))
+        p.name = str(i)
+        processes.append(p)
+        p.start()
+
+    for count, img in enumerate(gather_images(args.path)):
         inp_queue.put(img)
-    data_points = []
-    while not inp_queue.empty():
-        data = enc_queue.get()
+    logging.debug(f"Put {count} images for processing.")
+    if args.clean:
+        logging.info("Clean start chosen.")
+        data_points = []
+        try:
+            os.renames('data_points.pkl', 'data_points.pkl.old')
+            os.renames('results.pkl', 'results.pkl.old')
+        except FileNotFoundError:
+            pass
+    else:
+        try:
+            with open('data_points.pkl', 'rb') as f:
+                data_points = pickle.load(f)
+        except FileNotFoundError:
+            data_points = []
+
+    count = 0
+    while True:
+        if inp_queue.empty():
+            logging.info("Input queue is empty. Finishing up.")
+            if enc_queue.empty():
+                break
+        try:
+            data = enc_queue.get(timeout=600)
+        except queue.Empty:
+            logging.error("No processing is happening for some reason.")
+            break
         if 'error' in data:
-            print('Errored', data)
+            logging.error('Errored', data)
         else:
-            print('Processed', data['path'])
             data_points.append(data)
+            logging.debug('Found encoding in ' + data['path'])
+            count += 1
+            if count % 5:
+                continue
+            with open('data_points.pkl', 'wb') as f:
+                pickle.dump(data_points, f, protocol=pickle.HIGHEST_PROTOCOL)
+
     for _ in range(NUM_PROCESSES):
         inp_queue.put('END')
+    logging.info("Finished feature detection.")
     results = cluster_data_points(data_points)
     with open('results.pkl', 'wb') as file:
         pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
+    logging.info("Killing remaining processes.")
+    for i, p in enumerate(processes):
+        if p.is_alive():
+            logging.debug(f"Killed process {i}.")
+            p.terminate()
 
 
 if __name__ == '__main__':

@@ -1,8 +1,8 @@
 import cv2
-from clusterer.facenet import facenet
+from facenet import facenet
 import pickle
 import numpy as np
-from clusterer.DistanceMetrics import Similarity
+from DistanceMetrics import Similarity
 import face_recognition as FR
 import tensorflow as tf
 
@@ -21,7 +21,7 @@ def _equalize(image):
 tf.Graph().as_default()
 session = tf.Session()
 
-facenet.load_model('clusterer/models/20180402-114759.pb')
+facenet.load_model('models/20180402-114759.pb')
 img_holder = tf.get_default_graph().get_tensor_by_name(
     'input:0')
 embeddings = tf.get_default_graph().get_tensor_by_name(

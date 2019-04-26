@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import tempfile
 from flask import Flask, abort, jsonify, request
-from clusterer.cluster_finder import get_images
+from cluster_finder import get_images
 import cv2
 
 

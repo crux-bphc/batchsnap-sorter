@@ -152,13 +152,15 @@ def main():
                         help="Path to folder containing images to be sorted")
     parser.add_argument('--clean-start', action='store_true', dest='clean',
                         help="Discard results of previous runs and start over")
+    parser.add_argument('--cores', type=int, default=os.cpu_count(),
+                        help="Number of cores to use during feature detection")
     args = parser.parse_args()
     if args.clean and not args.path:
         print("Please provide path to images folder")
         return
     inp_queue = Queue()
     enc_queue = Queue()
-    NUM_PROCESSES = os.cpu_count() or 1
+    NUM_PROCESSES = args.cores or 1  # in case os.cpu_count() returns None
     logging.info(f"Starting {NUM_PROCESSES} processes.")
     processes = []
     for i in range(NUM_PROCESSES):

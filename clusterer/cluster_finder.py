@@ -5,18 +5,7 @@ import numpy as np
 from DistanceMetrics import Similarity
 import face_recognition as FR
 import tensorflow as tf
-
-
-def _equalize(image):
-    lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
-    l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    l1 = clahe.apply(l)
-    processed = cv2.merge((l1, a, b))
-    processed = cv2.cvtColor(processed, cv2.COLOR_LAB2RGB)
-
-    return processed
-
+import os
 
 tf.Graph().as_default()
 session = tf.Session()
@@ -28,6 +17,23 @@ embeddings = tf.get_default_graph().get_tensor_by_name(
     'embeddings:0')
 phase_train = tf.get_default_graph().get_tensor_by_name(
     'phase_train:0')
+
+results_file = os.environ.get('RESULTS_FILE', 'results.pkl')
+try:
+    with open(results_file, 'rb') as f:
+        data = pickle.load(f)
+except (FileNotFoundError, pickle.PickleError):
+    print("Unable to load clustering results.")
+    exit(1)
+
+
+def _equalize(image):
+    lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l1 = clahe.apply(l)
+    processed = cv2.merge((l1, a, b))
+    return cv2.cvtColor(processed, cv2.COLOR_LAB2RGB)
 
 
 def _prewhiten(image):
@@ -64,8 +70,6 @@ def prepare_encodings(image):
 
 
 def find_clusters(representative=None, use_CI=True, sigma=1.25):
-    with open('results.pkl', 'rb') as file:
-        data = pickle.load(file)
     metric = Similarity()
     possibilities = list()
     if representative is not None:

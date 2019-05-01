@@ -1,22 +1,25 @@
-version: "3"
+version: "3.7"
 services:
   clusterer:
+    container_name: bs_clusterer
+    build: ./clusterer
     image: bs-cl
     volumes:
-      - /images:/images
-    deploy:
-      replicas: 3
-      restart_policy:
-        condition: on-failure
+      - ${IMAGES_DIR:-/images}:/images
     networks:
       - webnet
+    environment:
+      - RESULTS_FILE=${RESULTS_FILE:-results.pkl}
   frontend:
+    container_name: bs_frontend
+    build: ./frontend
     image: bs-fr
     volumes:
-      - /images:/images
+      - ${IMAGES_DIR:-/images}:/images
     ports:
       - "80:80"
     networks:
       - webnet
 networks:
   webnet:
+

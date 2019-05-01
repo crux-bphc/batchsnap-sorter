@@ -18,7 +18,6 @@ from multiprocessing import Queue, Process, current_process
 logging.basicConfig(filename='clusterer.log', level=logging.DEBUG,
                     format='%(asctime)s %(message)s')
 MODEL = 'hog'
-MIN_CLUSTER_SIZE = 5
 
 
 def _equalize(image):
@@ -37,7 +36,7 @@ def _prewhiten(image):
     return np.multiply(np.subtract(image, mean), 1 / std_adj)
 
 
-def _blur_check(image, threshold=50):
+def _blur_check(image, threshold=20):
     image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     blur = cv2.Laplacian(image, cv2.CV_64F).var()
     return blur < threshold
@@ -47,6 +46,7 @@ def create_data_points(img_queue, enc_queue):
     predictor = dlib.shape_predictor('models/sp_68_point.dat')
     aligner = FaceAligner(predictor, desiredFaceWidth=300)
     proc_name = current_process().name
+
     with tf.Graph().as_default(), tf.Session() as session:
         graph = tf.get_default_graph()
         facenet.load_model('models/20180402-114759.pb')
@@ -55,7 +55,7 @@ def create_data_points(img_queue, enc_queue):
         phase_train = graph.get_tensor_by_name('phase_train:0')
         while True:
             try:
-                path = img_queue.get(timeout=10)
+                path = img_queue.get(timeout=300)
             except queue.Empty:
                 logging.info('Input queue is empty. Shutting down process.')
                 break
@@ -79,12 +79,14 @@ def create_data_points(img_queue, enc_queue):
                     rect = dlib.rectangle(l, t, r, b)
                     face = aligner.align(image, gray, rect)
                     try:
-                        y1, x2, y2, x1 = FR.face_locations(face, model=MODEL)[0]
+                        y1, x2, y2, x1 = FR.face_locations(
+                            face, model=MODEL)[0]
                         face = cv2.resize(face[y1:y2, x1:x2], (160, 160))
                     except IndexError:
                         face = cv2.resize(image[t:b, l:r], (160, 160))
-                    if _blur_check(face):
-                        continue
+                    # if _blur_check(face):
+                    #     logging.debug(f"{proc_name}: Face too blurry")
+                    #     continue
                     face = _prewhiten(face)
                     feed_dict = {img_holder: [face], phase_train: False}
                     encoding = session.run(embeddings, feed_dict=feed_dict)
@@ -94,20 +96,22 @@ def create_data_points(img_queue, enc_queue):
                 enc_queue.put({'path': path, 'error': str(e)})
 
 
-def cluster_data_points(data_points):
-    logging.info("Starting clustering")
+def cluster_data_points(data_points, cluster_size=5, distance_metric_func="Fractional"):
     points = [d['encoding'] for d in data_points]
     points = np.vstack(points)
     scaler = StandardScaler()
     scaler.fit(points)
     points = scaler.transform(points)
     dist_metric = Similarity()
-
-    clusterer = HDBSCAN(min_cluster_size=MIN_CLUSTER_SIZE,
+    if distance_metric_func == "Fractional":
+        dist_metric_func = dist_metric.fractional_distance
+    else:
+        dist_metric_func = dist_metric.euclidean_distance
+    clusterer = HDBSCAN(min_cluster_size=cluster_size,
                         metric='pyfunc',
-                        func=dist_metric.fractional_distance)
-    logging.debug("HDBSCAN done")
+                        func=dist_metric_func)
     clusterer.fit(points)
+    logging.info("Fit complete.")
     results = {}
     labelIDs = np.unique(clusterer.labels_)
     for labelID in labelIDs:
@@ -124,7 +128,6 @@ def cluster_data_points(data_points):
             'std_dev': np.std(encodings, axis=0),
             'sample_size': len(paths)
         }
-    logging.info("Finished clustering, found {} clusters".format(len(results)))
     return results
 
 
@@ -146,6 +149,23 @@ def gather_images(impath):
                     yield path
 
 
+def run_only_clustering():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--cluster-size', type=int, default=5,
+                        help="Minimum number of images to form a cluster")
+    parser.add_argument('-d', '--distance-metric',
+                        choices=["Fractional", "Euclidean"], default="Fractional",
+                        help="Distance metric to be used for the clusterer")
+    args = parser.parse_args()
+    with open('data_points.pkl', 'rb') as f:
+        data_points = pickle.load(f)
+    results = cluster_data_points(
+        data_points, args.cluster_size, args.distance_metric)
+    with open(f'results_{args.cluster_size}_{args.distance_metric}.pkl', 'wb') as file:
+        pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
+    print(len(results))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--path",
@@ -154,6 +174,11 @@ def main():
                         help="Discard results of previous runs and start over")
     parser.add_argument('--cores', type=int, default=os.cpu_count(),
                         help="Number of cores to use during feature detection")
+    parser.add_argument('-s', '--cluster-size', type=int, default=5,
+                        help="Minimum number of images to form a cluster")
+    parser.add_argument('-d', '--distance-metric',
+                        choices=["Fractional", "Euclidean"], default="Fractional",
+                        help="Distance metric to be used for the clusterer")
     args = parser.parse_args()
     if args.clean and not args.path:
         print("Please provide path to images folder")
@@ -166,14 +191,13 @@ def main():
     for i in range(NUM_PROCESSES):
         p = Process(target=create_data_points, args=(inp_queue, enc_queue))
         p.name = str(i)
-        processes.append(p)
         p.start()
-
+        processes.append(p)
+    logging.info("Gathering images")
     for count, img in enumerate(gather_images(args.path)):
         inp_queue.put(img)
     logging.debug(f"Put {count} images for processing.")
     if args.clean:
-        logging.info("Clean start chosen.")
         data_points = []
         try:
             os.renames('data_points.pkl', 'data_points.pkl.old')
@@ -186,7 +210,6 @@ def main():
                 data_points = pickle.load(f)
         except FileNotFoundError:
             data_points = []
-
     count = 0
     while True:
         if inp_queue.empty():
@@ -199,7 +222,7 @@ def main():
             logging.error("No processing is happening for some reason.")
             break
         if 'error' in data:
-            logging.error('Errored', data)
+            logging.error('Errored ' + data['error'])
         else:
             data_points.append(data)
             logging.debug('Found encoding in ' + data['path'])
@@ -212,8 +235,8 @@ def main():
     for _ in range(NUM_PROCESSES):
         inp_queue.put('END')
     logging.info("Finished feature detection.")
-    results = cluster_data_points(data_points)
-    with open('results.pkl', 'wb') as file:
+    results = cluster_data_points(data_points, args.cluster_size, args.distance_metric)
+    with open(f'results_{args.cluster_size}_{args.distance_metric}.pkl', 'wb') as file:
         pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
     logging.info("Killing remaining processes.")
     for i, p in enumerate(processes):

@@ -128,6 +128,7 @@ def cluster_data_points(data_points, cluster_size=5, distance_metric_func="Fract
             'std_dev': np.std(encodings, axis=0),
             'sample_size': len(paths)
         }
+    logging.info(f"Number of clusters: {len(results)}")
     return results
 
 
@@ -149,37 +150,7 @@ def gather_images(impath):
                     yield path
 
 
-def run_only_clustering():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-s', '--cluster-size', type=int, default=5,
-                        help="Minimum number of images to form a cluster")
-    parser.add_argument('-d', '--distance-metric',
-                        choices=["Fractional", "Euclidean"], default="Fractional",
-                        help="Distance metric to be used for the clusterer")
-    args = parser.parse_args()
-    with open('data_points.pkl', 'rb') as f:
-        data_points = pickle.load(f)
-    results = cluster_data_points(
-        data_points, args.cluster_size, args.distance_metric)
-    with open(f'results_{args.cluster_size}_{args.distance_metric}.pkl', 'wb') as file:
-        pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
-    print(len(results))
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--path",
-                        help="Path to folder containing images to be sorted")
-    parser.add_argument('--clean-start', action='store_true', dest='clean',
-                        help="Discard results of previous runs and start over")
-    parser.add_argument('--cores', type=int, default=os.cpu_count(),
-                        help="Number of cores to use during feature detection")
-    parser.add_argument('-s', '--cluster-size', type=int, default=5,
-                        help="Minimum number of images to form a cluster")
-    parser.add_argument('-d', '--distance-metric',
-                        choices=["Fractional", "Euclidean"], default="Fractional",
-                        help="Distance metric to be used for the clusterer")
-    args = parser.parse_args()
+def run_feature_detection(args):
     if args.clean and not args.path:
         print("Please provide path to images folder")
         return
@@ -235,14 +206,46 @@ def main():
     for _ in range(NUM_PROCESSES):
         inp_queue.put('END')
     logging.info("Finished feature detection.")
-    results = cluster_data_points(data_points, args.cluster_size, args.distance_metric)
-    with open(f'results_{args.cluster_size}_{args.distance_metric}.pkl', 'wb') as file:
-        pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
+
     logging.info("Killing remaining processes.")
     for i, p in enumerate(processes):
         if p.is_alive():
             logging.debug(f"Killed process {i}.")
             p.terminate()
+
+
+def run_clustering(args):
+    logging.debug("args: " + str(vars(args)))
+    with open('data_points.pkl', 'rb') as f:
+        data_points = pickle.load(f)
+    logging.debug(f"Data points in file: {len(data_points)}")
+    results = cluster_data_points(
+        data_points, args.cluster_size, args.distance_metric)
+    with open(f'results_{args.cluster_size}_{args.distance_metric}.pkl', 'wb') as file:
+        pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
+    print(len(results))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers()
+    parser_fd = subparsers.add_parser('fd')
+    parser_fd.add_argument("--path",
+                           help="Path to folder containing images to be sorted")
+    parser_fd.add_argument('--clean-start', action='store_true', dest='clean',
+                           help="Discard results of previous runs and start over")
+    parser_fd.add_argument('--cores', type=int, default=os.cpu_count(),
+                           help="Number of cores to use during feature detection")
+    parser_fd.set_defaults(func=run_feature_detection)
+    parser_cl = subparsers.add_parser('cl')
+    parser_cl.add_argument('-s', '--cluster-size', type=int, default=5,
+                           help="Minimum number of images to form a cluster")
+    parser_cl.add_argument('-d', '--distance-metric',
+                           choices=["Fractional", "Euclidean"], default="Fractional",
+                           help="Distance metric to be used for the clusterer")
+    parser_cl.set_defaults(func=run_clustering)
+    args = parser.parse_args()
+    args.func(args)
 
 
 if __name__ == '__main__':

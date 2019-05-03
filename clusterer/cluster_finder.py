@@ -51,60 +51,55 @@ def prepare_encodings(image):
     image = _equalize(image)
     faces = FR.face_locations(image,
                               model='hog')
-    if len(faces) == 1:
-        (t, r, b, l) = faces[0]
-        try:
-            face = cv2.resize(image[t:b, l:r], (160, 160))
-            face = _prewhiten(face)
-            feed_dict = {img_holder: [face], phase_train: False}
-            encoding = session.run(embeddings, feed_dict=feed_dict)
-            if len(encoding) == 0:
-                pass
-            else:
-                representative = encoding[0]
-        except:
-            print(
-                'Could not process face; make sure that the face is actually detectable')
-            return None
+    if len(faces) != 1:
+        return None
+    (t, r, b, l) = faces[0]
+    try:
+        face = cv2.resize(image[t:b, l:r], (160, 160))
+        face = _prewhiten(face)
+        feed_dict = {img_holder: [face], phase_train: False}
+        encoding = session.run(embeddings, feed_dict=feed_dict)
+        if len(encoding) != 0:
+            representative = encoding[0]
+    except:
+        return None
     return representative
 
 
-def find_clusters(representative=None, use_CI=True, sigma=1.25):
+def find_clusters(representative, use_CI=True, sigma=1.25):
     metric = Similarity()
     possibilities = list()
-    if representative is not None:
-        if use_CI is True:
-            # Use confidence intervals to check whether the person corresponds
-            # to a given cluster or not. A z-distribution is assumed here.
-            for labelID in data.keys():
-                if labelID == -1:
-                    pass
-                mean_encoding = data[labelID]['mean_encoding']
-                error = data[labelID]['std_dev']
-                n = data[labelID]['sample_size']
-                lower_bound = mean_encoding - \
-                    (np.multiply(error, 1.96) / np.power(n, 0.5))
-                upper_bound = mean_encoding + \
-                    (np.multiply(error, 1.96) / np.power(n, 0.5))
-                l1 = representative >= lower_bound
-                l2 = representative <= upper_bound
-                if np.all(l1 & l2):
-                    result = {'labelID': labelID,
-                              'paths': data[labelID]['paths']}
-                    possibilities.append(result)
-        else:
-            for labelID in data.keys():
-                centre_point = data[labelID]['mean_encoding']
-                error = data[labelID]['std_dev'] * sigma
-                sphere_point = np.add(centre_point, error)
-                sphere_radius = metric.fractional_distance(
-                    centre_point, sphere_point)
-                distance = metric.fractional_distance(
-                    centre_point, representative)
-                if distance <= sphere_radius and labelID != -1:
-                    result = {'labelID': labelID,
-                              'paths': data[labelID]['paths']}
-                    possibilities.append(result)
+    if use_CI:
+        # Use confidence intervals to check whether the person corresponds
+        # to a given cluster or not. A z-distribution is assumed here.
+        for labelID, cluster in data.items():
+            if labelID == -1:
+                continue
+            mean_encoding = cluster['mean_encoding']
+            error = cluster['std_dev']
+            n = cluster['sample_size']
+            lower_bound = mean_encoding - \
+                (np.multiply(error, 1.96) / np.power(n, 0.5))
+            upper_bound = mean_encoding + \
+                (np.multiply(error, 1.96) / np.power(n, 0.5))
+            l1 = representative >= lower_bound
+            l2 = representative <= upper_bound
+            if np.all(l1 & l2):
+                result = {'labelID': labelID,
+                          'paths': cluster['paths']}
+                possibilities.append(result)
+    else:
+        for labelID, cluster in data.items():
+            if labelID == -1:
+                continue
+            centre_point = cluster['mean_encoding']
+            error = cluster['std_dev'] * sigma
+            sphere_point = np.add(centre_point, error)
+            sphere_radius = metric.fractional_distance(centre_point, sphere_point)
+            distance = metric.fractional_distance(centre_point, representative)
+            if distance <= sphere_radius:
+                result = {'labelID': labelID, 'paths': cluster['paths']}
+                possibilities.append(result)
 
     return possibilities
 

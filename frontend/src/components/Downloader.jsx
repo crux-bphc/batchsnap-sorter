@@ -1,6 +1,6 @@
 import React, { Component } from "react";
 import axios from "axios";
-import { Modal, message, Progress, Icon } from "antd";
+import { Modal, message, Progress } from "antd";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 
@@ -21,9 +21,7 @@ class Downloader extends Component {
   downloadImages = async () => {
     const { links } = this.props;
     let count = 0;
-    let zips = [];
     let currentZipSize = 0;
-
     let currentZip = JSZip();
 
     for (let l of links) {
@@ -43,40 +41,36 @@ class Downloader extends Component {
       }
 
       ++count;
+
       currentZipSize += res.data.size;
-
-      if (currentZipSize > 499 * 1024 * 1024 || count % 200 === 0) {
-        zips.push(currentZip);
-        currentZip = JSZip(); // new zip
-        currentZipSize = res.data.size;
-      }
-
       const imageName = l.split(/^\/images\//)[1];
       currentZip.file(imageName, res.data, {
         binary: true
       });
 
+      if (currentZipSize > 475 * 1024 * 1024 || count === links.length) {
+        const hide = message.loading("Zipping downloaded images!", 1000);
+        currentZip
+          .generateAsync({
+            type: "blob"
+          })
+          .then(content => {
+            saveAs(content, `batchsnap-pics-${new Date().getTime()}.zip`);
+          })
+          .catch(_err => {
+            message.error("Error while zipping!");
+          })
+          .finally(() => {
+            hide();
+          });
+
+        currentZip = JSZip(); // new zip
+        currentZipSize = 0;
+      }
+
       this.setState({ progress: Math.floor((count / links.length) * 100) });
     }
-
-    if (Object.keys(currentZip.files).length > 0) {
-      zips.push(currentZip);
-    }
-
-    this.setState({ zipping: true });
-
-    for (let zip of zips) {
-      try {
-        let content = await zip.generateAsync({
-          type: "blob"
-        });
-        saveAs(content, `batchsnap-pics-${new Date().getTime()}.zip`);
-      } catch (err) {
-        message.error("Error while zipping!");
-        break;
-      }
-    }
-    message.info("Zipping complete!");
+    message.success("Download Complete!");
     this.close();
   };
 
@@ -104,12 +98,6 @@ class Downloader extends Component {
             <h3>Download Successful!</h3>
           )}
           <Progress type="circle" percent={this.state.progress} />
-          {this.state.zipping && (
-            <>
-              <h3>Zipping all your pictures..</h3>
-              <Icon type="loading" />
-            </>
-          )}
         </div>
       </Modal>
     );

@@ -1,7 +1,8 @@
 import argparse
 import logging
 import os
-import pickle
+#import pickle
+from h5py import File
 import queue
 import cv2
 import dlib
@@ -134,8 +135,10 @@ def cluster_data_points(data_points, cluster_size=5, distance_metric_func="Fract
 
 def gather_images(impath):
     try:
-        with open('data_points.pkl', 'rb') as f:
-            data = pickle.load(f)
+        data_points = File('data_points.hdf5','r')
+        data = data_points['data']
+        #with open('data_points.pkl', 'rb') as f:
+        #    data = pickle.load(f)
     except FileNotFoundError:
         processed_paths = set()
     else:
@@ -171,14 +174,16 @@ def run_feature_detection(args):
     if args.clean:
         data_points = []
         try:
-            os.renames('data_points.pkl', 'data_points.pkl.old')
-            os.renames('results.pkl', 'results.pkl.old')
+            os.renames('data_points.hdf5', 'data_points.hdf5.old')
+            os.renames('results.hdf5', 'results.hdf5.old')
         except FileNotFoundError:
             pass
     else:
         try:
-            with open('data_points.pkl', 'rb') as f:
-                data_points = pickle.load(f)
+            data = File('data_points.hdf5','r')
+            data_points = data['data'] 
+            #with open('data_points.pkl', 'rb') as f:
+            #    data_points = pickle.load(f)
         except FileNotFoundError:
             data_points = []
     count = 0
@@ -188,20 +193,22 @@ def run_feature_detection(args):
             if enc_queue.empty():
                 break
         try:
-            data = enc_queue.get(timeout=600)
+            err_data = enc_queue.get(timeout=600)
         except queue.Empty:
             logging.error("No processing is happening for some reason.")
             break
-        if 'error' in data:
-            logging.error('Errored ' + data['error'])
+        if 'error' in err_data:
+            logging.error('Errored ' + err_data['error'])
         else:
-            data_points.append(data)
-            logging.debug('Found encoding in ' + data['path'])
+            data_points.append(err_data)
+            logging.debug('Found encoding in ' + err_data['path'])
             count += 1
             if count % 5:
                 continue
-            with open('data_points.pkl', 'wb') as f:
-                pickle.dump(data_points, f, protocol=pickle.HIGHEST_PROTOCOL)
+            data_res = File('data_points.hdf5','w')
+            data_res['data'] = data_points
+            #with open('data_points.pkl', 'wb') as f:
+            #    pickle.dump(data_points, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     for _ in range(NUM_PROCESSES):
         inp_queue.put('END')
@@ -216,13 +223,17 @@ def run_feature_detection(args):
 
 def run_clustering(args):
     logging.debug("args: " + str(vars(args)))
-    with open('data_points.pkl', 'rb') as f:
-        data_points = pickle.load(f)
+    data = File('data_points.hdf5','r')
+    data_points = data['data']
+    #with open('data_points.pkl', 'rb') as f:
+    #    data_points = pickle.load(f)
     logging.debug(f"Data points in file: {len(data_points)}")
     results = cluster_data_points(
         data_points, args.cluster_size, args.distance_metric)
-    with open(f'results_{args.cluster_size}_{args.distance_metric}.pkl', 'wb') as file:
-        pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
+    data_res = File(f'results_{args.cluster_size}_{args.distance_metric}.hdf5', 'w')
+    data_res['results'] = results
+    #with open(f'results_{args.cluster_size}_{args.distance_metric}.pkl', 'wb') as file:
+    #    pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
     print(len(results))
 
 

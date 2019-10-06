@@ -3,7 +3,8 @@ import cv2
 import dlib
 from hdbscan import HDBSCAN
 from facenet import facenet
-import pickle
+#import pickle
+from h5py import File
 import os
 import tensorflow as tf
 from sklearn.preprocessing import normalize
@@ -143,9 +144,11 @@ class VideoCluster(object):
                     except:
                         print("There was an error. That's all we know.")
                         return False
-
-        with open('video_data.pkl', 'wb') as file:
-            pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
+        
+        video_data = File('video_data.hdf5','w')
+        video_data['results'] = results
+        #with open('video_data.pkl', 'wb') as file:
+        #    pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
 
         return True
 
@@ -154,9 +157,11 @@ class VideoCluster(object):
         if data is None or len(data) < 1:
             return None
         if processed is True:
-            with open('video_data.pkl', 'rb') as file:
-                data = pickle.load(file)
-                self.clusterSize = self.cs
+            video_data = File('video_data.hdf5','r')
+            data = video_data['results']
+            #with open('video_data.pkl', 'rb') as file:
+            #    data = pickle.load(file)
+            self.clusterSize = self.cs
         points = [d['encoding'] for d in data]
         points = np.vstack(points)
         points = normalize(points, norm='l2', axis=1)
@@ -185,8 +190,10 @@ class VideoCluster(object):
         if processed is False:
             return results
         else:
-            with open('video_results.pkl', 'wb') as file:
-                pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
+            video_results = File('video_results.hdf5','w')
+            video_results['results'] = results
+            #with open('video_results.pkl', 'wb') as file:
+            #    pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
 
             return results
 
@@ -194,8 +201,10 @@ class VideoCluster(object):
 
 
     def sort_videos(self):
-        with open('video_results.pkl', 'rb') as file:
-            data = pickle.load(file)
+        video_results = File('video_results.hdf5','r')
+        data = video_results['results']
+        #with open('video_results.pkl', 'rb') as file:
+        #    data = pickle.load(file)
 
         if not os.path.exists(self.sortPath):
             os.mkdir(self.sortPath)

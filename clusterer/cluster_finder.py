@@ -18,11 +18,13 @@ embeddings = tf.get_default_graph().get_tensor_by_name(
 phase_train = tf.get_default_graph().get_tensor_by_name(
     'phase_train:0')
 
-results_file = os.environ.get('RESULTS_FILE', 'results.pkl')
+results_file = os.environ.get('RESULTS_FILE', 'results.hdf5')
 try:
-    with open(results_file, 'rb') as f:
-        data = pickle.load(f)
-except (FileNotFoundError, pickle.PickleError):
+    File(results_file,'r')
+    data = results_file['results']
+    #with open(results_file, 'rb') as f:
+    #    data = pickle.load(f)
+except (OSError):
     print("Unable to load clustering results.")
     exit(1)
 

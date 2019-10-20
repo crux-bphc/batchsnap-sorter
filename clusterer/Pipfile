@@ -43,5 +43,11 @@ facenet = "*"
 gunicorn = "*"
 imutils = "*"
 
+[packages.functools32]
+file = """\
+    https://github.com/sarugaku/functools32/releases/download/3.2.3-2/\
+    functools32-3.2.3.post2-py2.py3-none-any.whl"""
+markers = "python_version < '3.0'"
+
 [requires]
 python_version = "3.7"

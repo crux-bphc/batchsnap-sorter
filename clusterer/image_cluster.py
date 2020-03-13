@@ -5,6 +5,7 @@ import pickle
 import queue
 import cv2
 import dlib
+import re
 import numpy as np
 import tensorflow as tf
 import face_recognition as FR
@@ -14,8 +15,9 @@ from imutils.face_utils import FaceAligner
 from DistanceMetrics import Similarity
 from multiprocessing import Queue, Process, current_process
 
-logging.basicConfig(filename='clusterer.log', level=logging.DEBUG,
-                    format='%(asctime)s %(message)s')
+logging.basicConfig(
+    filename='clusterer.log', level=logging.DEBUG, format='%(asctime)s %(message)s'
+)
 MODEL = 'hog'
 
 
@@ -40,32 +42,39 @@ def _blur_check(image, threshold=20):
     blur = cv2.Laplacian(image, cv2.CV_64F).var()
     return blur < threshold
 
+
 def load_model(model, input_map=None):
     # Check if the model is a model directory (containing a metagraph and a checkpoint file)
     #  or if it is a protobuf file with a frozen graph
     model_exp = os.path.expanduser(model)
-    if (os.path.isfile(model_exp)):
-        with gfile.FastGFile(model_exp,'rb') as f:
+    if os.path.isfile(model_exp):
+        with tf.gfile.FastGFile(model_exp, 'rb') as f:
             graph_def = tf.GraphDef()
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def, input_map=input_map, name='')
     else:
         print('Model directory: %s' % model_exp)
         meta_file, ckpt_file = get_model_filenames(model_exp)
-        
+
         print('Metagraph file: %s' % meta_file)
         print('Checkpoint file: %s' % ckpt_file)
-      
-        saver = tf.train.import_meta_graph(os.path.join(model_exp, meta_file), input_map=input_map)
+
+        saver = tf.train.import_meta_graph(
+            os.path.join(model_exp, meta_file), input_map=input_map
+        )
         saver.restore(tf.get_default_session(), os.path.join(model_exp, ckpt_file))
+
 
 def get_model_filenames(model_dir):
     files = os.listdir(model_dir)
     meta_files = [s for s in files if s.endswith('.meta')]
-    if len(meta_files)==0:
+    if len(meta_files) == 0:
         raise ValueError('No meta file found in the model directory (%s)' % model_dir)
-    elif len(meta_files)>1:
-        raise ValueError('There should not be more than one meta file in the model directory (%s)' % model_dir)
+    elif len(meta_files) > 1:
+        raise ValueError(
+            'There should not be more than one meta file in the model directory (%s)'
+            % model_dir
+        )
     meta_file = meta_files[0]
     ckpt = tf.train.get_checkpoint_state(model_dir)
     if ckpt and ckpt.model_checkpoint_path:
@@ -76,12 +85,13 @@ def get_model_filenames(model_dir):
     max_step = -1
     for f in files:
         step_str = re.match(r'(^model-[\w\- ]+.ckpt-(\d+))', f)
-        if step_str is not None and len(step_str.groups())>=2:
+        if step_str is not None and len(step_str.groups()) >= 2:
             step = int(step_str.groups()[1])
             if step > max_step:
                 max_step = step
                 ckpt_file = step_str.groups()[0]
     return meta_file, ckpt_file
+
 
 def create_data_points(img_queue, enc_queue):
     predictor = dlib.shape_predictor('models/sp_68_point.dat')
@@ -109,19 +119,20 @@ def create_data_points(img_queue, enc_queue):
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 (h, w) = image.shape[:2]
                 if (w, h) > (640, 480):
-                    image = cv2.resize(image, (0, 0), fx=0.4, fy=0.4,
-                                       interpolation=cv2.INTER_AREA)
+                    image = cv2.resize(
+                        image, (0, 0), fx=0.4, fy=0.4, interpolation=cv2.INTER_AREA
+                    )
                 image = _equalize(image)
                 gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-                boxes = FR.face_locations(gray, model=MODEL,
-                                          number_of_times_to_upsample=2)
+                boxes = FR.face_locations(
+                    gray, model=MODEL, number_of_times_to_upsample=2
+                )
                 for box in boxes:
                     (t, r, b, l) = box
                     rect = dlib.rectangle(l, t, r, b)
                     face = aligner.align(image, gray, rect)
                     try:
-                        y1, x2, y2, x1 = FR.face_locations(
-                            face, model=MODEL)[0]
+                        y1, x2, y2, x1 = FR.face_locations(face, model=MODEL)[0]
                         face = cv2.resize(face[y1:y2, x1:x2], (160, 160))
                     except IndexError:
                         face = cv2.resize(image[t:b, l:r], (160, 160))
@@ -148,9 +159,9 @@ def cluster_data_points(data_points, cluster_size=5, distance_metric_func="Eucli
         dist_metric_func = dist_metric.fractional_distance
     else:
         dist_metric_func = dist_metric.euclidean_distance
-    clusterer = HDBSCAN(min_cluster_size=cluster_size,
-                        metric='pyfunc',
-                        func=dist_metric_func)
+    clusterer = HDBSCAN(
+        min_cluster_size=cluster_size, metric='pyfunc', func=dist_metric_func
+    )
     clusterer.fit(points)
     logging.info("Fit complete.")
     results = {}
@@ -167,7 +178,7 @@ def cluster_data_points(data_points, cluster_size=5, distance_metric_func="Eucli
             'paths': paths,
             'mean_encoding': np.mean(np.asarray(encodings), axis=0),
             'std_dev': np.std(encodings, axis=0),
-            'sample_size': len(paths)
+            'sample_size': len(paths),
         }
     logging.info(f"Number of clusters: {len(results)}")
     return results
@@ -260,8 +271,7 @@ def run_clustering(args):
     with open('data_points.pkl', 'rb') as f:
         data_points = pickle.load(f)
     logging.debug(f"Data points in file: {len(data_points)}")
-    results = cluster_data_points(
-        data_points, args.cluster_size, args.distance_metric)
+    results = cluster_data_points(data_points, args.cluster_size, args.distance_metric)
     with open(f'results_{args.cluster_size}_{args.distance_metric}.pkl', 'wb') as file:
         pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
     print(len(results))
@@ -271,19 +281,37 @@ def main():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
     parser_fd = subparsers.add_parser('fd')
-    parser_fd.add_argument("--path",
-                           help="Path to folder containing images to be sorted")
-    parser_fd.add_argument('--clean-start', action='store_true', dest='clean',
-                           help="Discard results of previous runs and start over")
-    parser_fd.add_argument('--cores', type=int, default=os.cpu_count(),
-                           help="Number of cores to use during feature detection")
+    parser_fd.add_argument(
+        "--path", help="Path to folder containing images to be sorted"
+    )
+    parser_fd.add_argument(
+        '--clean-start',
+        action='store_true',
+        dest='clean',
+        help="Discard results of previous runs and start over",
+    )
+    parser_fd.add_argument(
+        '--cores',
+        type=int,
+        default=os.cpu_count(),
+        help="Number of cores to use during feature detection",
+    )
     parser_fd.set_defaults(func=run_feature_detection)
     parser_cl = subparsers.add_parser('cl')
-    parser_cl.add_argument('-s', '--cluster-size', type=int, default=5,
-                           help="Minimum number of images to form a cluster")
-    parser_cl.add_argument('-d', '--distance-metric',
-                           choices=["Fractional", "Euclidean"], default="Euclidean",
-                           help="Distance metric to be used for the clusterer")
+    parser_cl.add_argument(
+        '-s',
+        '--cluster-size',
+        type=int,
+        default=5,
+        help="Minimum number of images to form a cluster",
+    )
+    parser_cl.add_argument(
+        '-d',
+        '--distance-metric',
+        choices=["Fractional", "Euclidean"],
+        default="Euclidean",
+        help="Distance metric to be used for the clusterer",
+    )
     parser_cl.set_defaults(func=run_clustering)
     args = parser.parse_args()
     args.func(args)

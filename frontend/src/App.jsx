@@ -1,18 +1,17 @@
-import React, { Component } from "react";
+import React from "react";
 import { Card, Button, message, Icon } from "antd";
 import FileUpload from "./components/FileUpload";
 import Downloader from "./components/Downloader";
 import axios from "axios";
 import logo from "./assets/logo.png";
 
-class App extends Component {
-  state = {
-    upload: false,
-    gotResponse: false,
-    links: []
-  };
 
-  onUpload = file => {
+
+function App(){
+  const [upload,setUpload] = useState(false);
+  const [gotResponse,setGotResponse] = useState(false);
+  const [links,setLinks] = useState([]);
+  const onUpload = e =>{
     let formData = new FormData();
     formData.append("image", file);
     axios
@@ -20,30 +19,26 @@ class App extends Component {
       .then(res => {
         let response = res.data;
         console.log(response.links);
-        this.setState({ links: response.links || [], gotResponse: true });
+        setLinks(response.links || []);
+        setGotResponse(true);
         message.success("Uploaded successfully");
       })
       .catch(err => {
         message.error("An error occurred!");
-        this.reset();
+        reset();
       });
-    this.setState({ upload: true });
-  };
-
-  reset = () => {
-    this.setState({
-      upload: false,
-      links: [],
-      gotResponse: false
-    });
-  };
-
-  render() {
-    return (
+    setUpload(true);
+  }
+  const reset = () => {
+    setUpload(false);
+    setLinks([]);
+    setGotResponse(false);
+  }
+  return (
       <div style={{ textAlign: "center", marginTop: "5%" }}>
         <h1>Welcome to BatchSnap Sorter!</h1>
 
-        {!this.state.upload && (
+        {!upload && (
           <div
             style={{
               marginLeft: "33%",
@@ -53,12 +48,12 @@ class App extends Component {
             }}
           >
             <Card>
-              <FileUpload onUpload={this.onUpload} />
+              <FileUpload onUpload={onUpload} />
             </Card>
           </div>
         )}
 
-        {this.state.upload && (
+        {upload && (
           <div
             style={{
               marginLeft: "33%",
@@ -68,25 +63,25 @@ class App extends Component {
             }}
           >
             <Card>
-              {!this.state.gotResponse && (
+              {!gotResponse && (
                 <div>
                   <h2>Please wait while we fetch your pictures.. </h2>
                   <Icon type="loading" />
                 </div>
               )}
 
-              {this.state.gotResponse && (
+              {gotResponse && (
                 <div>
-                  {this.state.links.length !== 0 && (
+                  {links.length !== 0 && (
                     <div>
                       <Downloader
-                        onCompleteOrCancel={this.reset}
-                        links={this.state.links}
+                        onCompleteOrCancel={reset}
+                        links={links}
                       />
                     </div>
                   )}
 
-                  {!this.state.links.length && (
+                  {!links.length && (
                     <div>
                       <h2>Sorry, we couldn't find any pictures of you.</h2>
                     </div>
@@ -98,7 +93,7 @@ class App extends Component {
                 style={{
                   marginTop: "2.5%"
                 }}
-                onClick={this.reset}
+                onClick={reset}
               >
                 Try Again.
               </Button>
@@ -131,7 +126,6 @@ class App extends Component {
         </footer>
       </div>
     );
-  }
 }
 
 export default App;
